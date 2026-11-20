@@ -1,3 +1,14 @@
+[project]
+name = "gemini-mcp"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=4.2,<5",
+    "google-genai>=3.6,<4",
+    "httpx2",
+    "httpx>=0.27",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
