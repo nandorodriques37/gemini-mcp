@@ -3,9 +3,11 @@
 import base64
 import binascii
 import os
+import time
 from typing import Callable
 
 import httpx
+import httpx2
 from google import genai
 from google.genai import errors, types
 
@@ -13,8 +15,9 @@ MODELO_PADRAO = "gemini-3.7-flash"
 MAX_INLINE_BYTES = 3 * 1024 * 1024
 MAX_URLS = 3
 MAX_URL_BYTES = 10 * 1024 * 1024
-TIMEOUT_GEMINI_MS = 55_000
-TIMEOUT_DOWNLOAD_S = 20
+TIMEOUT_GEMINI_MS = 45_000
+DOWNLOAD_TOTAL_S = 12  # prazo somado de todos os downloads; 12 + 45 < 60 (maxDuration)
+TIMEOUT_DOWNLOAD_S = 10
 
 
 class GeminiErro(Exception):
@@ -28,23 +31,31 @@ def _cliente() -> genai.Client:
     return genai.Client(api_key=chave, http_options=types.HttpOptions(timeout=TIMEOUT_GEMINI_MS))
 
 
-def baixar_url(url: str) -> tuple[bytes, str]:
-    """Baixa a URL com limite de tamanho. Devolve (bytes, mime)."""
-    with httpx.stream("GET", url, follow_redirects=True, timeout=TIMEOUT_DOWNLOAD_S) as r:
-        r.raise_for_status()
-        dados = bytearray()
-        for bloco in r.iter_bytes():
-            dados.extend(bloco)
-            if len(dados) > MAX_URL_BYTES:
-                raise GeminiErro(f"arquivo em {url} passa de 10 MB")
-        mime = r.headers.get("content-type", "application/octet-stream").split(";")[0].strip()
+def baixar_url(url: str, prazo: float, cliente: httpx.Client | None = None) -> tuple[bytes, str]:
+    """Baixa a URL com limite de tamanho e prazo absoluto (time.monotonic). Devolve (bytes, mime)."""
+    proprio = cliente is None
+    cliente = cliente or httpx.Client(follow_redirects=True, timeout=TIMEOUT_DOWNLOAD_S)
+    try:
+        with cliente.stream("GET", url) as r:
+            r.raise_for_status()
+            dados = bytearray()
+            for bloco in r.iter_bytes():
+                if time.monotonic() > prazo:
+                    raise GeminiErro(f"download de {url} demorou demais")
+                dados.extend(bloco)
+                if len(dados) > MAX_URL_BYTES:
+                    raise GeminiErro(f"arquivo em {url} passa de 10 MB")
+            mime = r.headers.get("content-type", "application/octet-stream").split(";")[0].strip()
+    finally:
+        if proprio:
+            cliente.close()
     return bytes(dados), mime
 
 
 def montar_partes(
     arquivos: list[dict] | None,
     urls: list[str] | None,
-    baixar: Callable[[str], tuple[bytes, str]] = baixar_url,
+    baixar: Callable[[str, float], tuple[bytes, str]] = baixar_url,
 ) -> list[types.Part]:
     partes: list[types.Part] = []
     total = 0
@@ -62,9 +73,12 @@ def montar_partes(
     urls = urls or []
     if len(urls) > MAX_URLS:
         raise GeminiErro(f"no máximo {MAX_URLS} URLs por chamada")
+    prazo = time.monotonic() + DOWNLOAD_TOTAL_S
     for url in urls:
+        if time.monotonic() > prazo:
+            raise GeminiErro(f"downloads passaram de {DOWNLOAD_TOTAL_S} s; não baixei {url}")
         try:
-            dados, mime = baixar(url)
+            dados, mime = baixar(url, prazo)
         except GeminiErro:
             raise
         except httpx.HTTPError as e:
@@ -87,8 +101,10 @@ def gerar(prompt: str, instrucoes: str | None = None, modelo: str | None = None,
         )
     except errors.APIError as e:
         raise GeminiErro(_sem_segredo(f"erro do Gemini ({e.code}): {e.message}")) from None
-    except httpx.TimeoutException:
+    except (httpx.TimeoutException, httpx2.TimeoutException):
         raise GeminiErro("o Gemini demorou demais: use um modelo Flash ou um prompt menor") from None
+    except (httpx.HTTPError, httpx2.HTTPError) as e:
+        raise GeminiErro(f"não consegui falar com o Gemini: {type(e).__name__}") from None
 
     if not resposta.text:
         motivo = "desconhecido"

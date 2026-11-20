@@ -65,11 +65,11 @@ def test_base64_acima_3mb():
 
 def test_mais_de_3_urls():
     with pytest.raises(GeminiErro):
-        montar_partes(None, ["https://a/1", "https://a/2", "https://a/3", "https://a/4"], baixar=lambda u: (b"x", "text/plain"))
+        montar_partes(None, ["https://a/1", "https://a/2", "https://a/3", "https://a/4"], baixar=lambda u, p: (b"x", "text/plain"))
 
 
 def test_url_falha():
-    def baixar(url):
+    def baixar(url, prazo):
         raise httpx.HTTPError("404")
 
     with pytest.raises(GeminiErro, match="https://exemplo.com/x.pdf"):
@@ -77,7 +77,7 @@ def test_url_falha():
 
 
 def test_url_ok_vira_parte():
-    partes = montar_partes(None, ["https://a/doc.pdf"], baixar=lambda u: (b"%PDF", "application/pdf"))
+    partes = montar_partes(None, ["https://a/doc.pdf"], baixar=lambda u, p: (b"%PDF", "application/pdf"))
     assert partes[0].inline_data.mime_type == "application/pdf"
 
 
@@ -129,3 +129,43 @@ def test_listar_modelos_filtra(falso):
         SimpleNamespace(name="models/embed-b", supported_actions=["embedContent"]),
     ]
     assert listar_modelos() == ["gemini-a"]
+
+
+def test_gerar_timeout_httpx2(falso):
+    import httpx2
+    falso._erro = httpx2.ReadTimeout("lento")
+    with pytest.raises(GeminiErro, match="Flash"):
+        gerar("oi")
+
+
+def test_gerar_falha_conexao_httpx2(falso):
+    import httpx2
+    falso._erro = httpx2.ConnectError("sem rede")
+    with pytest.raises(GeminiErro, match="não consegui falar com o Gemini"):
+        gerar("oi")
+
+
+def test_orcamento_cabe_em_60s():
+    assert gemini.TIMEOUT_GEMINI_MS / 1000 + gemini.DOWNLOAD_TOTAL_S < 60
+
+
+def test_downloads_compartilham_prazo():
+    import time
+    prazos = []
+
+    def baixar(url, prazo):
+        prazos.append(prazo)
+        return b"x", "text/plain"
+
+    antes = time.monotonic()
+    montar_partes(None, ["https://a/1", "https://a/2"], baixar=baixar)
+    assert len(set(prazos)) == 1
+    assert prazos[0] - antes <= gemini.DOWNLOAD_TOTAL_S + 0.1
+
+
+def test_baixar_url_corta_no_prazo():
+    import time
+    transporte = httpx.MockTransport(lambda req: httpx.Response(200, content=b"abc"))
+    with httpx.Client(transport=transporte) as c:
+        with pytest.raises(GeminiErro, match="https://lento/x"):
+            gemini.baixar_url("https://lento/x", prazo=time.monotonic() - 1, cliente=c)

@@ -64,3 +64,21 @@ def test_app_http_com_token(monkeypatch):
         assert ok.json()["result"]["serverInfo"]["name"] == "Gemini"
         assert c.post("/mcp", json=_INIT, headers=_HDR).status_code == 401
         assert c.post("/mcp/segredo", json=_INIT, headers=_HDR).status_code == 200
+
+
+def test_app_sem_lifespan(monkeypatch):
+    import httpx
+    monkeypatch.setenv("MCP_TOKEN", "segredo")
+    import api.index as entrada
+    importlib.reload(entrada)
+
+    async def _run():
+        transporte = httpx.ASGITransport(app=entrada.app)
+        async with httpx.AsyncClient(transport=transporte, base_url="https://gemini-mcp.vercel.app") as c:
+            r1 = await c.post("/mcp", json=_INIT, headers={**_HDR, "Authorization": "Bearer segredo"})
+            r2 = await c.post("/mcp", json=_INIT, headers={**_HDR, "Authorization": "Bearer segredo"})
+            return r1, r2
+
+    r1, r2 = asyncio.run(_run())
+    assert r1.status_code == 200, r1.text
+    assert r2.status_code == 200, r2.text

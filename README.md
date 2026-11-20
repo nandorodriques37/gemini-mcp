@@ -44,7 +44,7 @@ Se o modelo padrão não existir, ajuste `GEMINI_MODEL` com um nome da lista.
 ## Limites
 - Arquivos em base64: até 3 MB somados (consomem tokens do Claude).
 - URLs: até 3, com até 10 MB cada.
-- Cada chamada tem até 60 s. Para respostas longas, prefira um modelo Flash.
+- Cada chamada tem até 60 s: até 12 s de downloads e até 45 s de Gemini. Para respostas longas, prefira um modelo Flash.
 
 ## Desenvolvimento
 
