@@ -95,8 +95,9 @@ def _sem_segredo(texto: str) -> str:
 def gerar(prompt: str, instrucoes: str | None = None, modelo: str | None = None, partes: list | None = None) -> str:
     nome_modelo = modelo or os.environ.get("GEMINI_MODEL", "").strip() or MODELO_PADRAO
     config = types.GenerateContentConfig(system_instruction=instrucoes) if instrucoes else types.GenerateContentConfig()
+    cliente = _cliente()  # manter a referência: o genai.Client fecha a conexão quando é coletado
     try:
-        resposta = _cliente().models.generate_content(
+        resposta = cliente.models.generate_content(
             model=nome_modelo, contents=[*(partes or []), prompt], config=config
         )
     except errors.APIError as e:
@@ -115,12 +116,12 @@ def gerar(prompt: str, instrucoes: str | None = None, modelo: str | None = None,
 
 
 def listar_modelos() -> list[str]:
+    cliente = _cliente()  # vivo até o fim da paginação
     try:
-        modelos = _cliente().models.list()
+        return [
+            m.name.removeprefix("models/")
+            for m in cliente.models.list()
+            if "generateContent" in (m.supported_actions or [])
+        ]
     except errors.APIError as e:
         raise GeminiErro(_sem_segredo(f"erro do Gemini ({e.code}): {e.message}")) from None
-    return [
-        m.name.removeprefix("models/")
-        for m in modelos
-        if "generateContent" in (m.supported_actions or [])
-    ]

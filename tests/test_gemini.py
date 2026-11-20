@@ -169,3 +169,43 @@ def test_baixar_url_corta_no_prazo():
     with httpx.Client(transport=transporte) as c:
         with pytest.raises(GeminiErro, match="https://lento/x"):
             gemini.baixar_url("https://lento/x", prazo=time.monotonic() - 1, cliente=c)
+
+
+class _Modelos:
+    def __init__(self, dono):
+        self._estado = dono._estado
+
+    def generate_content(self, **kw):
+        if self._estado["fechado"]:
+            raise RuntimeError("client has been closed")
+        return _resposta()
+
+    def list(self):
+        estado = self._estado
+
+        def _pager():
+            if estado["fechado"]:
+                raise RuntimeError("client has been closed")
+            yield SimpleNamespace(name="models/gemini-a", supported_actions=["generateContent"])
+        return _pager()
+
+
+class ClienteQueFechaAoSerColetado:
+    """Imita o genai.Client: fecha a conexão quando o objeto é coletado."""
+
+    def __init__(self):
+        self._estado = {"fechado": False}
+        self.models = _Modelos(self)
+
+    def __del__(self):
+        self._estado["fechado"] = True
+
+
+def test_cliente_vivo_durante_listagem(monkeypatch):
+    monkeypatch.setattr(gemini, "_cliente", ClienteQueFechaAoSerColetado)
+    assert listar_modelos() == ["gemini-a"]
+
+
+def test_cliente_vivo_durante_geracao(monkeypatch):
+    monkeypatch.setattr(gemini, "_cliente", ClienteQueFechaAoSerColetado)
+    assert gerar("oi") == "ok"
