@@ -6,7 +6,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 
 
 def _nomes(linhas):
-    return {re.split(r"[<>=!~ ;\[]", l.strip(), 1)[0].lower() for l in linhas if l.strip() and not l.startswith("#")}
+    return {re.split(r"[<>=!~ ;\[]", l.strip(), maxsplit=1)[0].lower() for l in linhas if l.strip() and not l.startswith("#")}
 
 
 def test_pyproject_declara_as_mesmas_dependencias():
