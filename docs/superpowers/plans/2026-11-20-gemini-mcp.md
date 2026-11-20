@@ -31,7 +31,7 @@
 
 ## Lote 1 — núcleo testável
 
-### Tarefa 1: Projeto e middleware de token
+### Task 1: Projeto e middleware de token
 
 **Arquivos:**
 - Criar: `requirements.txt`, `pyproject.toml` (só config do pytest: `pythonpath = ["."]`), `gemini_mcp/__init__.py`, `gemini_mcp/auth.py`, `.gitignore`
@@ -53,7 +53,7 @@
 - [ ] **Passo 4:** `pytest tests/test_auth.py -v` → 7 PASS.
 - [ ] **Passo 5:** `git commit -m "feat: middleware de token"`
 
-### Tarefa 2: Cliente Gemini
+### Task 2: Cliente Gemini
 
 **Arquivos:**
 - Criar: `gemini_mcp/gemini.py`
@@ -88,7 +88,7 @@
 
 ## Lote 2 — servidor MCP e entrada da Vercel
 
-### Tarefa 3: Ferramentas MCP e app da Vercel
+### Task 3: Ferramentas MCP e app da Vercel
 
 **Arquivos:**
 - Criar: `gemini_mcp/server.py`, `api/index.py`, `vercel.json`, `README.md`
@@ -114,7 +114,7 @@
 
 ## Lote 3 — publicação (com o João)
 
-### Tarefa 4: Deploy e teste real
+### Task 4: Deploy e teste real
 
 - [ ] **Passo 1:** João cria o projeto na Vercel a partir do repositório `gemini-mcp` e cadastra `GEMINI_API_KEY`, `MCP_TOKEN` e `GEMINI_MODEL`.
 - [ ] **Passo 2:** teste pós-deploy: `initialize` sem token → 401; com token → 200; `tools/list` → 2 ferramentas.
